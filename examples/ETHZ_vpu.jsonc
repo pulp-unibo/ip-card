@@ -1,0 +1,201 @@
+{
+  // =====================
+  // Basic Info (required)
+  // =====================
+  "basicInfo": {
+    // Licensing
+    "licensing": "Open-source (SolderPad v0.52)",
+
+    // Target FPGA / ASIC
+    "targetFpgaOrAsic": "ASIC, VCU118, VCU128",
+
+    // Design language
+    "designLanguage": "SystemVerilog"
+  },
+
+  // =====================
+  // System-Level Features (optional)
+  // =====================
+  "systemLevelFeatures": {
+    // Tight or Loose Coupling
+    "couplingType": "Tightly-coupled",
+
+    // Data Types
+    "dataTypes": "INT8-64, FP16-64",
+
+    // ISA
+    "isa": "RISC-V",
+
+    // Peak Ops/Cycle
+    "peakOpsPerCycle": "2 - 16 lanes (1 FPU each). On FPGA: 2 lanes = 2 DP ops / cycle",
+
+    // Interfaces
+    "interfaces": "CV-X-IF, AXI",
+
+    // Supported Operations
+    "supportedOperations": "RISC-V vector extension RVV 1.0",
+
+    // Compiler Support
+    "compilerSupport": "OpenSource RISC-V toolchain (GCC or LLVM)",
+
+    // External Memory Required
+    "externalMemoryRequired": "optional; L2 / DDR",
+
+    // Cache / Scratchpad
+    "cacheOrScratchpad": "AXI compliant: Cache + Scratchpad"
+  },
+
+  // =====================
+  // Architecture
+  // =====================
+  "architecture": {
+    // Type (required)
+    "type": "Von Neumann, SMP",
+
+    // No. Clock Domains (in sync with system, not internally generated) (required)
+    "numClockDomains": 1,
+
+    // Control Inteface (optional)
+    "controlInterface": {
+      // ISA Extension
+      "isaExtension": "RISC-V V v1.0",
+
+      // Memory Mapped
+      "memoryMapped": "No",
+
+      // Protocol
+      "protocol": "CV-X-IF + MMU + coherence IF"
+    },
+
+    // Memory Interface (optional)
+    "memoryInterface": {
+      // Interface Protocol
+      "interfaceProtocol": "AXI4",
+
+      // Hierarchy Level
+      "hierarchyLevel": "L2 (CVA6 L1 bypassed)",
+
+      // Cached?
+      "cached": null,
+
+      // IOMMU?
+      "iommu": null
+    },
+
+    // Interrupts (optional)
+    "interrupts": "Yes"
+  },
+
+  // =====================
+  // Microarchitecture (optional)
+  // =====================
+  "microarchitecture": {
+    "parametrization": {
+      // Parametric No. of Units?
+      "parametricNumUnits": "No",
+
+      // Parametric Config?
+      "parametricConfig": "Yes (# Vector Lanes, Vector Register Length)"
+    },
+
+    "programmability": {
+      // Programmable Cores?
+      "programmableCores": "Yes (CVA6)",
+
+      // ISA Extension
+      "isaExtension": "RISC-V (RV64 GCV)"
+    }
+  },
+
+  // =====================
+  // Software (optional)
+  // =====================
+  "software": {
+    "compiler": {
+      // Requires specialized compiler?
+      "requiresSpecializedCompiler": "No (RISC-V compatible)",
+
+      // Supported compiler(s)
+      "supportedCompilers": null
+    },
+
+    "hardwareAbstractionLayer": {
+      // HAL functions
+      "halFunctions": null
+    },
+
+    "highLevelApi": {
+      // Is there a high-level API/SDK?
+      "hasHighLevelApi": "Yes (C intrinsics)",
+
+      // SDK repository
+      "sdkRepository": null,
+
+      // Is there a domain specific compiler?
+      "hasDomainSpecificCompiler": null
+    }
+  },
+
+  // =====================
+  // Integration
+  // =====================
+  "integration": {
+    // ipDistribution.* (required)
+    "ipDistribution": {
+      // Manifest type
+      "manifestType": "Bender.yml",
+
+      // Standalone simulation?
+      "standaloneSimulation": "Yes",
+
+      // If above, SW requirements?
+      "standaloneSimulationSwRequirements": "QuestaSim or Verilator",
+
+      // Integration documented / examples?
+      "integrationDocsOrExamples": "Yes"
+    },
+
+    // synthesis.* (required)
+    "synthesis": {
+      // Is IP syntesizable?
+      "isSynthesizable": "Yes",
+
+      // FPGA synthesis examples avail?
+      "fpgaSynthesisExamples": "Yes",
+
+      // ASIC synthesis examples avail?
+      "asicSynthesisExamples": "Yes (proprietary)"
+    },
+
+    // simulation.* (required)
+    "simulation": {
+      // Closed-source simulation?
+      "closedSourceSimulation": "Yes (QuestaSim)",
+
+      // Open-source simulation?
+      "openSourceSimulation": "Yes (Verilator)"
+    },
+
+    // Other integration elements (optional)
+    "evaluation": {
+      // PPA results available?
+      "ppaResultsAvailable": "Yes"
+    }
+  },
+
+  // =====================
+  // Physical Implementation (optional)
+  // =====================
+  "physicalImplementation": {
+    "asicArea": {
+      // Number of gates
+      "numGates": "1.7 MGE (2 lanes) – 12.8 MGE (16 lanes)",
+
+      // On-chip internal memory size
+      "onChipInternalMemorySize": null,
+
+      // Target clock frequency
+      "targetClockFrequency": ">1 GHz (GF22nm), crit. path ca. 40 FO4 gates"
+    }
+  }
+}

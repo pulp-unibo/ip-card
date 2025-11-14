@@ -1,0 +1,201 @@
+{
+  // =====================
+  // Basic Info (required)
+  // =====================
+  "basicInfo": {
+    // Licensing
+    "licensing": "Open-source (SolderPad v0.52)",
+
+    // Target FPGA / ASIC
+    "targetFpgaOrAsic": "ASIC, VCU118",
+
+    // Design language
+    "designLanguage": "SystemVerilog"
+  },
+
+  // =====================
+  // System-Level Features (optional)
+  // =====================
+  "systemLevelFeatures": {
+    // Tight or Loose Coupling
+    "couplingType": "Loosely-coupled",
+
+    // Data Types
+    "dataTypes": "INT2/4/8 (mixed, SW), FP16, BFP16 (SW+TPE)",
+
+    // ISA
+    "isa": "RISC-V + memory-mapped TPE",
+
+    // Peak Ops/Cycle
+    "peakOpsPerCycle": "384 (TPE)",
+
+    // Interfaces
+    "interfaces": "AXI",
+
+    // Supported Operations
+    "supportedOperations": "SW + GEMM (TPE)",
+
+    // Compiler Support
+    "compilerSupport": "For Xpulpnn support",
+
+    // External Memory Required
+    "externalMemoryRequired": "Yes, L2 scratchpad",
+
+    // Cache / Scratchpad
+    "cacheOrScratchpad": "Scratchpad"
+  },
+
+  // =====================
+  // Architecture
+  // =====================
+  "architecture": {
+    // Type (required)
+    "type": "von Neumann, SMP + Systolic Array (TPE)",
+
+    // No. Clock Domains (in sync with system, not internally generated) (required)
+    "numClockDomains": 1,
+
+    // Control Inteface (optional)
+    "controlInterface": {
+      // ISA Extension
+      "isaExtension": "No",
+
+      // Memory Mapped
+      "memoryMapped": "Yes",
+
+      // Protocol
+      "protocol": "AXI4 64b"
+    },
+
+    // Memory Interface (optional)
+    "memoryInterface": {
+      // Interface Protocol
+      "interfaceProtocol": "AXI4 64b",
+
+      // Hierarchy Level
+      "hierarchyLevel": null,
+
+      // Cached?
+      "cached": "No",
+
+      // IOMMU?
+      "iommu": "No"
+    },
+
+    // Interrupts (optional)
+    "interrupts": "Async Cluster Events"
+  },
+
+  // =====================
+  // Microarchitecture (optional)
+  // =====================
+  "microarchitecture": {
+    "parametrization": {
+      // Parametric No. of Units?
+      "parametricNumUnits": "Yes (# of cores, size of TPE)",
+
+      // Parametric Config?
+      "parametricConfig": "Yes"
+    },
+
+    "programmability": {
+      // Programmable Cores?
+      "programmableCores": "Yes",
+
+      // ISA Extension
+      "isaExtension": "RISC-V (RV32 IMCFXpulpnn)"
+    }
+  },
+
+  // =====================
+  // Software (optional)
+  // =====================
+  "software": {
+    "compiler": {
+      // Requires specialized compiler?
+      "requiresSpecializedCompiler": "Yes (Xpulpnn)",
+
+      // Supported compiler(s)
+      "supportedCompilers": null
+    },
+
+    "hardwareAbstractionLayer": {
+      // HAL functions
+      "halFunctions": "Bare-metal HAL"
+    },
+
+    "highLevelApi": {
+      // Is there a high-level API/SDK?
+      "hasHighLevelApi": "Yes",
+
+      // SDK repository
+      "sdkRepository": "GitHub",
+
+      // Is there a domain specific compiler?
+      "hasDomainSpecificCompiler": "In development by another partner"
+    }
+  },
+
+  // =====================
+  // Integration
+  // =====================
+  "integration": {
+    // ipDistribution.* (required)
+    "ipDistribution": {
+      // Manifest type
+      "manifestType": "Bender.yml",
+
+      // Standalone simulation?
+      "standaloneSimulation": "Yes",
+
+      // If above, SW requirements?
+      "standaloneSimulationSwRequirements": "Python and QuestaSim",
+
+      // Integration documented / examples?
+      "integrationDocsOrExamples": "Yes"
+    },
+
+    // synthesis.* (required)
+    "synthesis": {
+      // Is IP syntesizable?
+      "isSynthesizable": "Yes",
+
+      // FPGA synthesis examples avail?
+      "fpgaSynthesisExamples": "Yes",
+
+      // ASIC synthesis examples avail?
+      "asicSynthesisExamples": "Yes (proprietary, GF22nm, GF12nm, Intel 16nm)"
+    },
+
+    // simulation.* (required)
+    "simulation": {
+      // Closed-source simulation?
+      "closedSourceSimulation": "Yes (QuestaSim)",
+
+      // Open-source simulation?
+      "openSourceSimulation": "No"
+    },
+
+    // Other integration elements (optional)
+    "evaluation": {
+      // PPA results available?
+      "ppaResultsAvailable": "Yes"
+    }
+  },
+
+  // =====================
+  // Physical Implementation (optional)
+  // =====================
+  "physicalImplementation": {
+    "asicArea": {
+      // Number of gates
+      "numGates": "~3 MGE",
+
+      // On-chip internal memory size
+      "onChipInternalMemorySize": "64-256 KiB",
+
+      // Target clock frequency
+      "targetClockFrequency": ">500 MHz (GF12nm)"
+    }
+  }
+}

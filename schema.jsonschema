@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ISOLDEIPDescriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "basicInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "licensing": { "type": "string" },
+        "targetFpgaOrAsic": { "type": "string" },
+        "designLanguage": { "type": "string" }
+      },
+      "required": [
+        "licensing",
+        "targetFpgaOrAsic",
+        "designLanguage"
+      ]
+    },
+
+    "systemLevelFeatures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "couplingType": { "type": ["string", "null"] },
+        "dataTypes": { "type": ["array", "string", "null"], "items": { "type": "string" } },
+        "isa": { "type": ["string", "null"] },
+        "peakOpsPerCycle": { "type": ["number", "string", "null"] },
+        "interfaces": { "type": ["array", "string", "null"], "items": { "type": "string" } },
+        "supportedOperations": { "type": ["array", "string", "null"], "items": { "type": "string" } },
+        "compilerSupport": { "type": ["string", "null"] },
+        "externalMemoryRequired": { "type": ["boolean", "string", "null"] },
+        "cacheOrScratchpad": { "type": ["string", "null"] }
+      }
+    },
+
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "numClockDomains": { "type": ["number", "string"] },
+        "controlInterface": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "isaExtension": { "type": ["string", "null"] },
+            "memoryMapped": { "type": ["boolean", "string", "null"] },
+            "protocol": { "type": ["string", "null"] }
+          }
+        },
+        "memoryInterface": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interfaceProtocol": { "type": ["string", "null"] },
+            "hierarchyLevel": { "type": ["string", "null"] },
+            "cached": { "type": ["boolean", "string", "null"] },
+            "iommu": { "type": ["boolean", "string", "null"] }
+          }
+        },
+        "interrupts": { "type": ["string", "null"] }
+      },
+      "required": [
+        "type",
+        "numClockDomains"
+      ]
+    },
+
+    "microarchitecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parametrization": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parametricNumUnits": { "type": ["boolean", "string", "null"] },
+            "parametricConfig": { "type": ["string", "null"] }
+          }
+        },
+        "programmability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "programmableCores": { "type": ["boolean", "string", "null"] },
+            "isaExtension": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compiler": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requiresSpecializedCompiler": { "type": ["boolean", "string", "null"] },
+            "supportedCompilers": {
+              "type": ["array", "string", "null"],
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "hardwareAbstractionLayer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "halFunctions": {
+              "type": ["array", "string", "null"],
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "highLevelApi": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hasHighLevelApi": { "type": ["boolean", "string", "null"] },
+            "sdkRepository": { "type": ["string", "null"] },
+            "hasDomainSpecificCompiler": { "type": ["boolean", "string", "null"] }
+          }
+        }
+      }
+    },
+
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ipDistribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "manifestType": { "type": "string" },
+            "standaloneSimulation": { "type": ["boolean", "string"] },
+            "standaloneSimulationSwRequirements": { "type": ["string", "null"] },
+            "integrationDocsOrExamples": { "type": ["string", "null"] }
+          },
+          "required": [
+            "manifestType",
+            "standaloneSimulation"
+          ]
+        },
+        "synthesis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "isSynthesizable": { "type": ["boolean", "string"] },
+            "fpgaSynthesisExamples": { "type": ["string", "null"] },
+            "asicSynthesisExamples": { "type": ["string", "null"] }
+          },
+          "required": [
+            "isSynthesizable"
+          ]
+        },
+        "simulation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "closedSourceSimulation": { "type": ["string", "null"] },
+            "openSourceSimulation": { "type": ["string", "null"] }
+          }
+        },
+        "evaluation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ppaResultsAvailable": { "type": ["boolean", "string", "null"] }
+          }
+        }
+      },
+      "required": [
+        "ipDistribution",
+        "synthesis",
+        "simulation"
+      ]
+    },
+
+    "physicalImplementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asicArea": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "numGates": { "type": ["number", "string", "null"] },
+            "onChipInternalMemorySize": { "type": ["number", "string", "null"] },
+            "targetClockFrequency": { "type": ["number", "string", "null"] }
+          }
+        }
+      }
+    }
+  },
+
+  "required": [
+    "basicInfo",
+    "architecture",
+    "integration"
+  ]
+}
