@@ -20,7 +20,19 @@
 
 import json
 import argparse
+from pathlib import Path
+from typing import Any, Iterable, List, Optional, Sequence, Tuple
+
 from jsonschema import validate, ValidationError
+
+LEVEL_COLOR_PALETTES = [
+    ("#f9d0d0", "#fde8e8"),  # Level 1 - reds
+    ("#d6f2dc", "#edf9f0"),  # Level 2 - greens
+    ("#d8e8fb", "#edf3fe"),  # Level 3 - blues
+    ("#ebd8fb", "#f5edfe"),  # Level 4 - purples
+]
+
+VALUE_COLORS = ("#e4e4e4", "#f4f4f4")
 
 def strip_jsonc_comments(text: str) -> str:
     import re
@@ -37,7 +49,167 @@ def strip_jsonc_comments(text: str) -> str:
     return '\n'.join(result)
 
 
-def main(schema: str = "schema.jsonschema", ip: str = None):
+def flatten_fields(data: Any, path: Optional[Sequence[str]] = None) -> List[Tuple[List[str], Any]]:
+    """Return ([path segments], value) entries for each leaf node."""
+    if path is None:
+        path = []
+    entries: List[Tuple[List[str], Any]] = []
+
+    if isinstance(data, dict):
+        for key, value in data.items():
+            entries.extend(flatten_fields(value, [*path, str(key)]))
+    elif isinstance(data, list):
+        for idx, value in enumerate(data):
+            entries.extend(flatten_fields(value, [*path, f"[{idx}]"]))
+    else:
+        entries.append(([str(part) for part in path], data))
+
+    return entries
+
+
+def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) -> None:
+    try:
+        from odf.opendocument import OpenDocumentSpreadsheet
+        from odf.table import Table, TableColumn, TableRow, TableCell
+        from odf.text import P
+        from odf.style import Style, TextProperties, TableColumnProperties, TableCellProperties
+    except ImportError as exc:
+        raise RuntimeError(
+            "Exporting to ODS requires the 'odfpy' package. Install it with 'pip install odfpy'."
+        ) from exc
+
+    doc = OpenDocumentSpreadsheet()
+    header_style = Style(name="HeaderCellStyle", family="table-cell")
+    header_style.addElement(TextProperties(fontweight="bold"))
+    doc.styles.addElement(header_style)
+
+    flattened_entries = list(flattened)
+    max_depth = max((len(parts) for parts, _ in flattened_entries), default=0)
+
+    def chars_to_cm(char_count: int) -> float:
+        # rough conversion to keep columns readable while not overly wide
+        return max(2.0, char_count * 0.25 + 0.5)
+
+    column_widths = [0] * max_depth
+    value_column_width = 0
+
+    for parts, value in flattened_entries:
+        for idx in range(max_depth):
+            segment = parts[idx] if idx < len(parts) else ""
+            column_widths[idx] = max(column_widths[idx], len(segment))
+        value_text = "" if value is None else str(value)
+        value_column_width = max(value_column_width, len(value_text))
+
+    table = Table(name="IP Card")
+    for idx, width in enumerate(column_widths):
+        column_style = Style(name=f"ColLevel{idx + 1}", family="table-column")
+        column_style.addElement(TableColumnProperties(columnwidth=f"{chars_to_cm(width):.2f}cm"))
+        doc.automaticstyles.addElement(column_style)
+        table.addElement(TableColumn(stylename=column_style))
+
+    value_column_style = Style(name="ColValue", family="table-column")
+    value_column_style.addElement(TableColumnProperties(columnwidth=f"{chars_to_cm(value_column_width):.2f}cm"))
+    doc.automaticstyles.addElement(value_column_style)
+    table.addElement(TableColumn(stylename=value_column_style))
+
+    header = TableRow()
+    header_styles: List[Style] = []
+    for idx in range(max_depth):
+        base_color = ["#b30000", "#0f8a2c", "#0f4c81", "#5a189a"]
+        color = base_color[idx] if idx < len(base_color) else "#333333"
+        header_style = Style(name=f"HeaderLevel{idx + 1}", family="table-cell")
+        header_style.addElement(
+            TableCellProperties(backgroundcolor=color)
+        )
+        header_style.addElement(TextProperties(fontweight="bold", color="#ffffff"))
+        doc.styles.addElement(header_style)
+        header_styles.append(header_style)
+
+    value_header_style = Style(name="HeaderValue", family="table-cell")
+    value_header_style.addElement(TableCellProperties(backgroundcolor="#000000"))
+    value_header_style.addElement(TextProperties(fontweight="bold", color="#ffffff"))
+    doc.styles.addElement(value_header_style)
+
+    for level in range(max_depth):
+        label = f"Level {level + 1}"
+        cell = TableCell(stylename=header_styles[level], valuetype="string")
+        cell.addElement(P(text=label))
+        header.addElement(cell)
+    value_header_cell = TableCell(stylename=value_header_style, valuetype="string")
+    value_header_cell.addElement(P(text="Value"))
+    header.addElement(value_header_cell)
+    table.addElement(header)
+
+    shaded_levels = min(max_depth, len(LEVEL_COLOR_PALETTES))
+    level_states = [{"prev": None, "index": 0} for _ in range(shaded_levels)]
+    level_cell_styles: dict[Tuple[int, int], Style] = {}
+    value_cell_styles: dict[int, Style] = {}
+    value_state = {"prev_nonempty": False, "index": 0}
+
+    def get_level_cell_style(level: int, color_index: int) -> Style:
+        key = (level, color_index)
+        style = level_cell_styles.get(key)
+        if style is None:
+            color = LEVEL_COLOR_PALETTES[level][color_index]
+            style = Style(name=f"Level{level + 1}Shade{color_index}", family="table-cell")
+            style.addElement(TableCellProperties(backgroundcolor=color))
+            doc.automaticstyles.addElement(style)
+            level_cell_styles[key] = style
+        return style
+
+    def get_value_cell_style(color_index: int) -> Style:
+        style = value_cell_styles.get(color_index)
+        if style is None:
+            color = VALUE_COLORS[color_index]
+            style = Style(name=f"ValueShade{color_index}", family="table-cell")
+            style.addElement(TableCellProperties(backgroundcolor=color))
+            doc.automaticstyles.addElement(style)
+            value_cell_styles[color_index] = style
+        return style
+
+    for parts, value in flattened_entries:
+        row = TableRow()
+        for depth in range(max_depth):
+            segment = parts[depth] if depth < len(parts) else ""
+            cell_kwargs = {"valuetype": "string"}
+            if segment and depth < shaded_levels:
+                state = level_states[depth]
+                if state["prev"] is None:
+                    state["index"] = 0
+                elif segment != state["prev"]:
+                    state["index"] = 1 - state["index"]
+                state["prev"] = segment
+                cell_kwargs["stylename"] = get_level_cell_style(depth, state["index"])
+            elif depth < shaded_levels:
+                level_states[depth]["prev"] = None
+
+            cell = TableCell(**cell_kwargs)
+            cell.addElement(P(text=segment))
+            row.addElement(cell)
+
+        value_text = "" if value is None else str(value)
+        value_kwargs = {"valuetype": "string"}
+        if value_text:
+            if value_state["prev_nonempty"]:
+                value_state["index"] = 1 - value_state["index"]
+            else:
+                value_state["index"] = 0
+            value_state["prev_nonempty"] = True
+            value_kwargs["stylename"] = get_value_cell_style(value_state["index"])
+        else:
+            value_state["prev_nonempty"] = False
+        value_cell = TableCell(**value_kwargs)
+        value_cell.addElement(P(text=value_text))
+        row.addElement(value_cell)
+        table.addElement(row)
+
+    doc.spreadsheet.addElement(table)
+
+    out_path = Path(output_path)
+    doc.save(str(out_path), addsuffix=not out_path.suffix)
+
+
+def main(schema: str = "schema.jsonschema", ip: str = None, export_ods: Optional[str] = None):
     if ip is None:
         raise ValueError("IP argument is required")
     
@@ -84,6 +256,14 @@ def main(schema: str = "schema.jsonschema", ip: str = None):
         print("❌ JSON is NOT compliant")
         print("Path:", list(e.path))      # where in the JSON the error occurred
         print("Message:", e.message)      # human-readable error
+        return
+
+    if export_ods:
+        try:
+            export_to_ods(flatten_fields(data), export_ods)
+            print(f"📝 Exported IP card to {export_ods}")
+        except RuntimeError as exc:
+            print(f"❌ Failed to export to ODS: {exc}")
 
 
 if __name__ == "__main__":
@@ -92,6 +272,8 @@ if __name__ == "__main__":
                        help="Path to the JSON schema file")
     parser.add_argument("--ip", type=str, required=True,
                        help="Path to the IP JSON file to validate")
+    parser.add_argument("--export-ods", type=str,
+                       help="Path to export a flattened, human-readable ODS spreadsheet")
     
     args = parser.parse_args()
-    main(schema=args.schema, ip=args.ip)
+    main(schema=args.schema, ip=args.ip, export_ods=args.export_ods)
