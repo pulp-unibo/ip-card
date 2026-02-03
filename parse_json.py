@@ -209,7 +209,160 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
     doc.save(str(out_path), addsuffix=not out_path.suffix)
 
 
-def main(schema: str = "schema.jsonschema", ip: str = None, export_ods: Optional[str] = None):
+def export_to_latex(data: dict, output_path: str) -> None:
+    """Export IP card data to LaTeX table format."""
+    
+    def escape_latex(text: str) -> str:
+        """Escape special LaTeX characters."""
+        if text is None:
+            return ""
+        text = str(text)
+        replacements = {
+            '&': r'\&',
+            '%': r'\%',
+            '$': r'\$',
+            '#': r'\#',
+            '_': r'\_',
+            '{': r'\{',
+            '}': r'\}',
+            '~': r'\textasciitilde{}',
+            '^': r'\textasciicircum{}',
+            '\\': r'\textbackslash{}',
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
+    
+    def format_field_name(key: str) -> str:
+        """Convert camelCase field names to human-readable format."""
+        import re
+        # Insert space before capitals
+        result = re.sub(r'([a-z])([A-Z])', r'\1 \2', key)
+        # Capitalize first letter
+        result = result[0].upper() + result[1:] if result else result
+        return result
+    
+    def process_dict_to_rows(d: dict, section_name: str = None) -> List[Tuple[str, str, str]]:
+        """Convert a dictionary to table rows. Returns list of (field, subfield, value) tuples."""
+        rows = []
+        
+        for key, value in d.items():
+            field_name = format_field_name(key)
+            
+            if isinstance(value, dict):
+                # Nested dictionary - field name becomes a multirow parent
+                subrows = []
+                for subkey, subvalue in value.items():
+                    subfield_name = format_field_name(subkey)
+                    subvalue_str = str(subvalue) if subvalue is not None else ""
+                    subrows.append((field_name, subfield_name, subvalue_str))
+                
+                # First subrow includes the parent field name with multirow
+                if subrows:
+                    rows.extend(subrows)
+            else:
+                # Simple key-value pair
+                value_str = str(value) if value is not None else ""
+                rows.append((field_name, "", value_str))
+        
+        return rows
+    
+    latex_lines = []
+    
+    # Header comments
+    latex_lines.append("% Please add the following required packages to your document preamble:")
+    latex_lines.append("% \\usepackage{booktabs}")
+    latex_lines.append("% \\usepackage{multirow}")
+    latex_lines.append("% \\usepackage{longtable}")
+    latex_lines.append("% Note: It may be necessary to compile the document several times to get a multi-page table to line up properly")
+    latex_lines.append("")
+    latex_lines.append("\\begin{table}[h!]")
+    latex_lines.append("% \\caption{IP Card}")
+    latex_lines.append("% \\resizebox{\\textwidth}{!}{%")
+    latex_lines.append("\\centering")
+    latex_lines.append("\\scalebox{0.5558}{%")
+    latex_lines.append("\\begin{tabular}{@{}lll@{}}")
+    latex_lines.append("\\toprule")
+    
+    # Process each major section
+    section_order = [
+        ("basicInfo", "Basic Info"),
+        ("systemLevelFeatures", "System-Level Features"),
+        ("architecture", "Architecture"),
+        ("microarchitecture", "Microarchitecture"),
+        ("software", "Software"),
+        ("integration", "Integration"),
+        ("physicalImplementation", "Physical Implementation"),
+    ]
+    
+    for section_key, section_title in section_order:
+        if section_key not in data:
+            continue
+            
+        section_data = data[section_key]
+        
+        # Section header
+        latex_lines.append(f"\\multicolumn{{3}}{{c}}{{\\textbf{{{escape_latex(section_title)}}}}} \\\\ \\toprule")
+        
+        # Process section content
+        rows = process_dict_to_rows(section_data, section_title)
+        
+        # Group rows by field name for multirow handling
+        current_field = None
+        field_rows = []
+        all_field_groups = []
+        
+        # First, group all rows by field
+        for field, subfield, value in rows:
+            if field != current_field:
+                if field_rows:
+                    all_field_groups.append((current_field, field_rows))
+                current_field = field
+                field_rows = []
+            field_rows.append((subfield, value))
+        
+        # Don't forget the last group
+        if field_rows:
+            all_field_groups.append((current_field, field_rows))
+        
+        # Now output all field groups with proper midrule placement
+        for idx, (field_name, field_data) in enumerate(all_field_groups):
+            if len(field_data) > 1:
+                # Use multirow for the field name
+                latex_lines.append(f"\\multirow{{{len(field_data)}}}{{*}}{{\\textit{{{escape_latex(field_name)}}}}} & {escape_latex(field_data[0][0])} & {escape_latex(field_data[0][1])} \\\\")
+                for subf, val in field_data[1:]:
+                    latex_lines.append(f" & {escape_latex(subf)} & {escape_latex(val)} \\\\")
+            else:
+                # Single row
+                if field_data[0][0]:  # Has subfield
+                    latex_lines.append(f"\\multirow{{1}}{{*}}{{\\textit{{{escape_latex(field_name)}}}}} & {escape_latex(field_data[0][0])} & {escape_latex(field_data[0][1])} \\\\")
+                else:  # No subfield, just field and value
+                    latex_lines.append(f"\\textit{{{escape_latex(field_name)}}} & {escape_latex(field_data[0][1])} &  \\\\")
+            
+            # Add midrule after each field group except the last one in the section
+            if idx < len(all_field_groups) - 1:
+                latex_lines.append("\\midrule")
+        
+        # Add toprule after each section (except the last one)
+        if section_key != section_order[-1][0]:
+            # Check if there are more sections to come
+            remaining_sections = section_order[section_order.index((section_key, section_title)) + 1:]
+            if any(s[0] in data for s in remaining_sections):
+                latex_lines.append("\\toprule")
+    
+    # Footer
+    latex_lines.append("\\bottomrule")
+    latex_lines.append("\\end{tabular}%")
+    latex_lines.append("}")
+    latex_lines.append("\\end{table}")
+    
+    # Write to file
+    out_path = Path(output_path)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(latex_lines))
+
+
+def main(schema: str = "schema.jsonschema", ip: str = None, export_ods: Optional[str] = None, export_latex: Optional[str] = None):
     if ip is None:
         raise ValueError("IP argument is required")
     
@@ -264,6 +417,13 @@ def main(schema: str = "schema.jsonschema", ip: str = None, export_ods: Optional
             print(f"📝 Exported IP card to {export_ods}")
         except RuntimeError as exc:
             print(f"❌ Failed to export to ODS: {exc}")
+    
+    if export_latex:
+        try:
+            export_to_latex(data, export_latex)
+            print(f"📝 Exported IP card to LaTeX: {export_latex}")
+        except Exception as exc:
+            print(f"❌ Failed to export to LaTeX: {exc}")
 
 
 if __name__ == "__main__":
@@ -274,6 +434,8 @@ if __name__ == "__main__":
                        help="Path to the IP JSON file to validate")
     parser.add_argument("--export-ods", type=str,
                        help="Path to export a flattened, human-readable ODS spreadsheet")
+    parser.add_argument("--export-latex", type=str,
+                       help="Path to export a LaTeX table file")
     
     args = parser.parse_args()
-    main(schema=args.schema, ip=args.ip, export_ods=args.export_ods)
+    main(schema=args.schema, ip=args.ip, export_ods=args.export_ods, export_latex=args.export_latex)
