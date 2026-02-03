@@ -139,7 +139,8 @@
             "manifestType": { "type": "string" },
             "standaloneSimulation": { "type": ["boolean", "string"] },
             "standaloneSimulationSwRequirements": { "type": ["string", "null"] },
-            "integrationDocsOrExamples": { "type": ["string", "null"] }
+            "integrationDocsOrExamples": { "type": ["string", "null"] },
+            "ipXact": { "type": ["string", "null"] }
           },
           "required": [
             "manifestType",
