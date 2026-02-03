@@ -152,7 +152,10 @@
       "standaloneSimulationSwRequirements": "Python and QuestaSim",
 
       // Integration documented / examples?
-      "integrationDocsOrExamples": "Yes"
+      "integrationDocsOrExamples": "Yes",
+
+      // SystemRDL
+      "systemRdl": "https://github.com/pulp-platform/redmule/blob/fc/mm/rtl/ctrl/redmule_regif.rdl"
     },
 
     // synthesis.* (required)
