@@ -218,6 +218,7 @@ def export_to_latex(data: dict, output_path: str) -> None:
             return ""
         text = str(text)
         replacements = {
+            '\\': r'\textbackslash{}',  # Must be first to avoid double-escaping
             '&': r'\&',
             '%': r'\%',
             '$': r'\$',
@@ -225,9 +226,10 @@ def export_to_latex(data: dict, output_path: str) -> None:
             '_': r'\_',
             '{': r'\{',
             '}': r'\}',
-            '~': r'\textasciitilde{}',
+            '~': r'$\sim$',
+            '<': r'$<$',
+            '>': r'$>$',
             '^': r'\textasciicircum{}',
-            '\\': r'\textbackslash{}',
         }
         for old, new in replacements.items():
             text = text.replace(old, new)
