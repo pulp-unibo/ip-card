@@ -35,16 +35,69 @@ LEVEL_COLOR_PALETTES = [
 VALUE_COLORS = ("#e4e4e4", "#f4f4f4")
 
 def strip_jsonc_comments(text: str) -> str:
-    import re
+    """Strip // and /* */ comments from JSONC while preserving strings."""
     lines = text.split('\n')
     result = []
     
     for line in lines:
-        # Remove // comments but preserve the line structure
-        line = re.sub(r'//.*$', '', line)
-        # Remove /* */ comments on the same line
-        line = re.sub(r'/\*.*?\*/', '', line)
-        result.append(line)
+        # Process character by character to handle strings correctly
+        cleaned = []
+        in_string = False
+        escape_next = False
+        i = 0
+        
+        while i < len(line):
+            char = line[i]
+            
+            # Handle escape sequences
+            if escape_next:
+                cleaned.append(char)
+                escape_next = False
+                i += 1
+                continue
+            
+            # Handle backslash (escape character)
+            if char == '\\' and in_string:
+                cleaned.append(char)
+                escape_next = True
+                i += 1
+                continue
+            
+            # Handle quote (string delimiter)
+            if char == '"':
+                cleaned.append(char)
+                in_string = not in_string
+                i += 1
+                continue
+            
+            # If we're in a string, just copy the character
+            if in_string:
+                cleaned.append(char)
+                i += 1
+                continue
+            
+            # Check for // comment (only outside strings)
+            if i + 1 < len(line) and line[i:i+2] == '//':
+                # Rest of line is a comment, stop processing
+                break
+            
+            # Check for /* comment (only outside strings)
+            if i + 1 < len(line) and line[i:i+2] == '/*':
+                # Find the closing */
+                close_idx = line.find('*/', i + 2)
+                if close_idx != -1:
+                    # Skip past the comment
+                    i = close_idx + 2
+                    continue
+                else:
+                    # Comment continues to end of line
+                    break
+            
+            # Regular character outside string and comment
+            cleaned.append(char)
+            i += 1
+        
+        result.append(''.join(cleaned))
     
     return '\n'.join(result)
 
