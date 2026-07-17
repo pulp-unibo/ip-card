@@ -20,6 +20,7 @@
 
 import json
 import argparse
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -36,11 +37,54 @@ VALUE_COLORS = ("#e4e4e4", "#f4f4f4")
 
 ACRONYMS = {
     "ip":  "IP",
+    "hw": "HW",
+    "sw":  "SW",
     "isa": "ISA",
     "trl": "TRL",
-    "sw":  "SW",
     "api": "API",
+    "cli": "CLI",
     "soc": "SoC",
+    "url": "URL",
+    "uri": "URI",
+    "sdk": "SDK",
+    "hal": "HAL",
+    "dsl": "DSL",
+    "ppa": "PPA",
+    "fpga": "FPGA",
+    "asic": "ASIC",
+    "rdl": "RDL",
+    "xact": "XACT",
+    "iommu": "IOMMU",
+    "os": "OS",
+    "cpu": "CPU",
+    "gpu": "GPU",
+    "dma": "DMA",
+    "mmio": "MMIO",
+    "axil": "AXIL",
+    "axi": "AXI",
+    "apb": "APB",
+    "ahb": "AHB",
+    "noc": "NOC",
+    "tlb": "TLB",
+    "irq": "IRQ",
+    "uvm": "UVM",
+    "rtl": "RTL",
+    "gds": "GDS",
+    "pdk": "PDK",
+    "sram": "SRAM",
+    "ddr": "DDR",
+    "hbm": "HBM",
+    "rom": "ROM",
+    "ram": "RAM",
+    "json": "JSON",
+    "jsonc": "JSONC",
+    "csv": "CSV",
+    "xml": "XML",
+    "yaml": "YAML",
+    "elf": "ELF",
+    "ods": "ODS",
+    "latex": "LaTeX",
+    "v": "V",
 }
 
 
@@ -112,6 +156,17 @@ def strip_jsonc_comments(text: str) -> str:
     return '\n'.join(result)
 
 
+def load_json_or_jsonc(path: str) -> Any:
+    raw = Path(path).read_text(encoding="utf-8")
+    return json.loads(strip_jsonc_comments(raw))
+
+
+def normalize_abbreviations_in_text(text: str) -> str:
+    for lower, upper in sorted(ACRONYMS.items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf"\b{re.escape(lower)}\b", upper, text, flags=re.IGNORECASE)
+    return text
+
+
 def flatten_fields(data: Any, path: Optional[Sequence[str]] = None) -> List[Tuple[List[str], Any]]:
     """Return ([path segments], value) entries for each leaf node."""
     if path is None:
@@ -147,7 +202,8 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
     doc.styles.addElement(header_style)
 
     flattened_entries = list(flattened)
-    max_depth = max((len(parts) for parts, _ in flattened_entries), default=0)
+    visible_entries = [([segment for segment in parts if not segment.startswith("[")], value) for parts, value in flattened_entries]
+    max_depth = max((len(parts) for parts, _ in visible_entries), default=0)
 
     def chars_to_cm(char_count: int) -> float:
         # rough conversion to keep columns readable while not overly wide
@@ -156,11 +212,12 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
     column_widths = [0] * max_depth
     value_column_width = 0
 
-    for parts, value in flattened_entries:
+    for visible_parts, value in visible_entries:
         for idx in range(max_depth):
-            segment = parts[idx] if idx < len(parts) else ""
-            column_widths[idx] = max(column_widths[idx], len(segment))
-        value_text = "" if value is None else str(value)
+            segment = visible_parts[idx] if idx < len(visible_parts) else ""
+            display_segment = format_field_name(segment) if segment else segment
+            column_widths[idx] = max(column_widths[idx], len(display_segment))
+        value_text = "" if value is None else format_value(value)
         value_column_width = max(value_column_width, len(value_text))
 
     table = Table(name="IP Card")
@@ -230,10 +287,11 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
             value_cell_styles[color_index] = style
         return style
 
-    for parts, value in flattened_entries:
+    for visible_parts, value in visible_entries:
         row = TableRow()
         for depth in range(max_depth):
-            segment = parts[depth] if depth < len(parts) else ""
+            segment = visible_parts[depth] if depth < len(visible_parts) else ""
+            display_segment = format_field_name(segment) if segment else segment
             cell_kwargs = {"valuetype": "string"}
             if segment and depth < shaded_levels:
                 state = level_states[depth]
@@ -247,10 +305,10 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
                 level_states[depth]["prev"] = None
 
             cell = TableCell(**cell_kwargs)
-            cell.addElement(P(text=segment))
+            cell.addElement(P(text=display_segment))
             row.addElement(cell)
 
-        value_text = "" if value is None else str(value)
+        value_text = "" if value is None else format_value(value)
         value_kwargs = {"valuetype": "string"}
         if value_text:
             if value_state["prev_nonempty"]:
@@ -261,6 +319,7 @@ def export_to_ods(flattened: Iterable[Tuple[List[str], Any]], output_path: str) 
             value_kwargs["stylename"] = get_value_cell_style(value_state["index"])
         else:
             value_state["prev_nonempty"] = False
+
         value_cell = TableCell(**value_kwargs)
         value_cell.addElement(P(text=value_text))
         row.addElement(value_cell)
@@ -277,6 +336,7 @@ def escape_latex(text: Any) -> str:
     if text is None:
         return ""
     text = str(text)
+
     replacements = {
         "\\": r"\textbackslash{}",  # Must be first to avoid double-escaping.
         "&": r"\&",
@@ -299,6 +359,17 @@ def escape_latex(text: Any) -> str:
 def format_field_name(key: str) -> str:
     """Convert camelCase / PascalCase field names to human-readable labels,
     preserving known acronyms (IP, ISA, SW, TRL, …)."""
+    special_cases = {
+        "ipXact": "IP-XACT",
+        "targetFpgaOrAsic": "Target FPGA or ASIC",
+        "highLevelApi": "highLevelAPI",
+        "isaExtension": "ISAExtension",
+        "organizationURL": "Organization URL",
+        "repositoryURL": "Repository URL",
+    }
+    if key in special_cases:
+        return special_cases[key]
+
     import re
 
     # Split leading acronym from the rest: SWDependencies → SW | Dependencies
@@ -502,24 +573,49 @@ def validate_against_schema(data: Any, schema: Dict[str, Any]) -> None:
         validate(instance=data, schema=schema)
 
 
+def uppercase_schema_acronyms(value: Any) -> Any:
+    if isinstance(value, dict):
+        result: Dict[str, Any] = {}
+        for key, item in value.items():
+            if key in {"title", "description", "$comment"} and isinstance(item, str):
+                result[key] = normalize_abbreviations_in_text(item)
+            else:
+                result[key] = uppercase_schema_acronyms(item)
+        return result
+    if isinstance(value, list):
+        return [uppercase_schema_acronyms(item) for item in value]
+    if isinstance(value, str):
+        return normalize_abbreviations_in_text(value)
+    return value
+
+
+def write_json(path: str, data: Any) -> None:
+    Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def main(
     schema: str = "schema.jsonschema",
     ip: str = None,
     export_ods: Optional[str] = None,
     export_latex: Optional[str] = None,
+    normalize_schema: Optional[str] = None,
 ) -> int:
-    if ip is None:
-        raise ValueError("IP argument is required")
-
     try:
-        with open(schema, "r", encoding="utf-8") as f:
-            schema_data = json.load(f)
+        schema_data = load_json_or_jsonc(schema)
     except FileNotFoundError:
         print(f"Schema file not found: {schema}")
         return 1
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON in schema file: {e}")
+    except json.JSONDecodeError as exc:
+        print(f"Invalid JSON in schema file: {exc}")
         return 1
+
+    if normalize_schema:
+        normalized = uppercase_schema_acronyms(schema_data)
+        write_json(normalize_schema, normalized)
+        print(f"Normalized schema written to {normalize_schema}")
+
+    if ip is None:
+        raise ValueError("IP argument is required")
 
     try:
         with open(ip, "r", encoding="utf-8") as f:
@@ -547,10 +643,10 @@ def main(
     try:
         validate_against_schema(data, schema_data)
         print("JSON is schema-compliant")
-    except ValidationError as e:
+    except ValidationError as exc:
         print("JSON is NOT compliant")
-        print("Path:", list(e.path))
-        print("Message:", e.message)
+        print("Path:", list(exc.path))
+        print("Message:", exc.message)
         return 1
 
     if export_ods:
@@ -580,13 +676,21 @@ if __name__ == "__main__":
     parser.add_argument("--schema", default="schema.jsonschema", type=str, 
                        help="Path to the JSON schema file")
     parser.add_argument("--ip", type=str, required=True,
-                       help="Path to the IP JSON file to validate")
+                       help="Path to the IP JSON/JSONC file to validate")
     parser.add_argument("--export-ods", type=str,
                        help="Path to export a flattened, human-readable ODS spreadsheet")
     parser.add_argument("--export-latex", type=str,
                        help="Path to export a LaTeX table file")
+    parser.add_argument("--normalize-schema", type=str,
+                       help="Write a copy of the schema with schema acronyms normalized to uppercase")
     
     args = parser.parse_args()
     raise SystemExit(
-        main(schema=args.schema, ip=args.ip, export_ods=args.export_ods, export_latex=args.export_latex)
+        main(
+            schema=args.schema,
+            ip=args.ip,
+            export_ods=args.export_ods,
+            export_latex=args.export_latex,
+            normalize_schema=args.normalize_schema,
+        )
     )
