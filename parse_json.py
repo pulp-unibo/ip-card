@@ -21,6 +21,10 @@
 import json
 import argparse
 import re
+import shutil
+import subprocess
+import tempfile
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -358,7 +362,7 @@ def escape_latex(text: Any) -> str:
 
 def format_field_name(key: str) -> str:
     """Convert camelCase / PascalCase field names to human-readable labels,
-    preserving known acronyms (IP, ISA, SW, TRL, …)."""
+    preserving known acronyms (IP, ISA, SW, TRL, â€¦)."""
     special_cases = {
         "ipXact": "IP-XACT",
         "targetFpgaOrAsic": "Target FPGA or ASIC",
@@ -372,7 +376,7 @@ def format_field_name(key: str) -> str:
 
     import re
 
-    # Split leading acronym from the rest: SWDependencies → SW | Dependencies
+    # Split leading acronym from the rest: SWDependencies â†’ SW | Dependencies
     key = re.sub(r'^([A-Z]{2,})([A-Z][a-z])', r'\1 \2', key)
 
     parts = re.findall(r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z0-9]+|[A-Z]+', key)
@@ -593,12 +597,188 @@ def write_json(path: str, data: Any) -> None:
     Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+
+def _latex_text(value: Any) -> str:
+    """Escape a scalar for the standalone PDF table."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        value = "true" if value else "false"
+    return escape_latex(value)
+
+
+def _join_scalar_list(values: List[Any]) -> str:
+    clean = [str(v) for v in values if v is not None and str(v) != ""]
+    if not clean:
+        return ""
+    return r" \textbullet\ " + r" \newline \textbullet\ ".join(escape_latex(v) for v in clean)
+
+
+def _standalone_rows(section_data: Any) -> List[Tuple[str, str, str]]:
+    """Flatten one schema section to readable 3-column rows."""
+    rows: List[Tuple[str, str, str]] = []
+    if not isinstance(section_data, dict):
+        return [("", "", _latex_text(section_data))]
+
+    def add_value(field: str, subpath: str, value: Any) -> None:
+        if isinstance(value, dict):
+            if not value:
+                rows.append((field, subpath, ""))
+            else:
+                for k, v in value.items():
+                    next_path = format_field_name(str(k)) if not subpath else f"{subpath} / {format_field_name(str(k))}"
+                    add_value(field, next_path, v)
+        elif isinstance(value, list):
+            if not value:
+                rows.append((field, subpath, ""))
+            elif all(is_scalar(v) for v in value):
+                rows.append((field, subpath, _join_scalar_list(value)))
+            else:
+                for i, item in enumerate(value, start=1):
+                    idx_path = f"Item {i}" if not subpath else f"{subpath} / Item {i}"
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            add_value(field, f"{idx_path} / {format_field_name(str(k))}", v)
+                    else:
+                        add_value(field, idx_path, item)
+        else:
+            rows.append((field, subpath, _latex_text(value)))
+
+    for key, value in section_data.items():
+        field = format_field_name(str(key))
+        if isinstance(value, dict):
+            for k, v in value.items():
+                add_value(field, format_field_name(str(k)), v)
+        elif isinstance(value, list) and value and not all(is_scalar(v) for v in value):
+            for i, item in enumerate(value, start=1):
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        add_value(field, f"Item {i} / {format_field_name(str(k))}", v)
+                else:
+                    add_value(field, f"Item {i}", item)
+        elif isinstance(value, list):
+            rows.append((field, "", _join_scalar_list(value)))
+        else:
+            rows.append((field, "", _latex_text(value)))
+    return rows
+
+
+def _standalone_body(data: Dict[str, Any]) -> str:
+    section_titles = {
+        "schemaVersion": "Schema Version",
+        "basicInfo": "Basic Information",
+        "systemLevelInfo": "System-Level Information",
+        "interfaces": "Interfaces and Artifacts",
+        "deployment": "Deployment",
+        "features": "Project-Specific Features",
+    }
+    lines: List[str] = []
+    lines.append(r"\begin{longtable}{@{}L{0.23\textwidth}L{0.25\textwidth}L{0.48\textwidth}@{}}")
+    lines.append(r"\arrayrulecolor{ISOLDEBorder}")
+    row_index = 0
+    for section_key, default_title in get_section_order(data):
+        if section_key not in data:
+            continue
+        title = section_titles.get(section_key, default_title)
+        lines.append(rf"\SectionRow{{{escape_latex(title)}}}")
+        rows = _standalone_rows(data[section_key])
+        for field, subfield, value in rows:
+            if row_index % 2 == 1:
+                lines.append(r"\rowcolor{ISOLDELight}")
+            lines.append(
+                rf"\LabelCell{{{escape_latex(field)}}} & {escape_latex(subfield)} & {value} \\ \hline"
+            )
+            row_index += 1
+    lines.append(r"\end{longtable}")
+    return "\n".join(lines)
+
+
+def _resolve_pdf_template(template_path: Optional[str]) -> Path:
+    if template_path:
+        p = Path(template_path)
+        if not p.exists():
+            raise FileNotFoundError(f"PDF template not found: {template_path}")
+        return p
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent / "templates" / "swipcard_pdf_template.tex",
+        here.parent.parent / "templates" / "swipcard_pdf_template.tex",
+        Path.cwd() / "templates" / "swipcard_pdf_template.tex",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    raise FileNotFoundError("Could not locate templates/swipcard_pdf_template.tex")
+
+
+def render_standalone_latex(data: Dict[str, Any], template_path: Optional[str] = None) -> str:
+    """Render a complete, compilable LaTeX IP Card using the common template."""
+    template = _resolve_pdf_template(template_path).read_text(encoding="utf-8")
+    basic = data.get("basicInfo", {}) if isinstance(data, dict) else {}
+    title = str(basic.get("ipName", "Software IP Card"))
+    provider = ""
+    providers = basic.get("provider") or []
+    if isinstance(providers, list) and providers and isinstance(providers[0], dict):
+        provider = str(providers[0].get("organizationAlias", [providers[0].get("organizationName", "")])[0] if providers[0].get("organizationAlias") else providers[0].get("organizationName", ""))
+    project = str(basic.get("project", ""))
+    work_item = str(basic.get("workItem", ""))
+    version = str(basic.get("version", ""))
+    subtitle_parts = [x for x in [provider, project, work_item, f"Version {version}" if version else ""] if x]
+    subtitle = " | ".join(subtitle_parts)
+    footer = f"SW IP Card schema v{data.get('schemaVersion', '')} | Generated from validated JSONC"
+    replacements = {
+        "@@TITLE@@": escape_latex(title),
+        "@@SUBTITLE@@": escape_latex(subtitle),
+        "@@FOOTER_LEFT@@": escape_latex(footer),
+        "@@BODY@@": _standalone_body(data),
+    }
+    for key, value in replacements.items():
+        template = template.replace(key, value)
+    return template
+
+
+def export_standalone_latex(data: Dict[str, Any], output_path: str, template_path: Optional[str] = None) -> None:
+    Path(output_path).write_text(render_standalone_latex(data, template_path), encoding="utf-8")
+
+
+def export_to_pdf(data: Dict[str, Any], output_path: str, template_path: Optional[str] = None,
+                  standalone_tex_path: Optional[str] = None) -> None:
+    """Generate a standardized PDF from validated card data via a common LaTeX template."""
+    latexmk = shutil.which("latexmk")
+    xelatex = shutil.which("xelatex")
+    if not latexmk and not xelatex:
+        raise RuntimeError("PDF export requires latexmk or xelatex in PATH")
+
+    pdf_path = Path(output_path).resolve()
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="swipcard_pdf_") as tmp:
+        tmpdir = Path(tmp)
+        tex_path = tmpdir / "card.tex"
+        tex_text = render_standalone_latex(data, template_path)
+        tex_path.write_text(tex_text, encoding="utf-8")
+        if standalone_tex_path:
+            Path(standalone_tex_path).write_text(tex_text, encoding="utf-8")
+        if latexmk:
+            cmd = [latexmk, "-xelatex", "-interaction=nonstopmode", "-halt-on-error", "-outdir=" + str(tmpdir), str(tex_path)]
+        else:
+            cmd = [xelatex, "-interaction=nonstopmode", "-halt-on-error", "-output-directory=" + str(tmpdir), str(tex_path)]
+        proc = subprocess.run(cmd, cwd=tmpdir, text=True, capture_output=True)
+        generated = tmpdir / "card.pdf"
+        if proc.returncode != 0 or not generated.exists():
+            tail = "\n".join((proc.stdout + "\n" + proc.stderr).splitlines()[-60:])
+            raise RuntimeError("LaTeX PDF generation failed:\n" + tail)
+        shutil.copy2(generated, pdf_path)
+
+
 def main(
     schema: str = "schema.jsonschema",
     ip: str = None,
     export_ods: Optional[str] = None,
     export_latex: Optional[str] = None,
     normalize_schema: Optional[str] = None,
+    export_latex_standalone: Optional[str] = None,
+    export_pdf: Optional[str] = None,
+    pdf_template: Optional[str] = None,
 ) -> int:
     try:
         schema_data = load_json_or_jsonc(schema)
@@ -668,6 +848,28 @@ def main(
             print(f"Failed to export to LaTeX: {exc}")
             return 1
 
+    if export_latex_standalone:
+        try:
+            latex_data = data
+            if isinstance(data, list):
+                latex_data = {f"Item {i}": item for i, item in enumerate(data, start=1)}
+            export_standalone_latex(latex_data, export_latex_standalone, pdf_template)
+            print(f"Exported standalone LaTeX IP card: {export_latex_standalone}")
+        except Exception as exc:
+            print(f"Failed to export standalone LaTeX: {exc}")
+            return 1
+
+    if export_pdf:
+        try:
+            latex_data = data
+            if isinstance(data, list):
+                latex_data = {f"Item {i}": item for i, item in enumerate(data, start=1)}
+            export_to_pdf(latex_data, export_pdf, pdf_template, export_latex_standalone)
+            print(f"Exported standardized PDF IP card: {export_pdf}")
+        except Exception as exc:
+            print(f"Failed to export PDF: {exc}")
+            return 1
+
     return 0
 
 
@@ -681,9 +883,19 @@ if __name__ == "__main__":
                        help="Path to export a flattened, human-readable ODS spreadsheet")
     parser.add_argument("--export-latex", type=str,
                        help="Path to export a LaTeX table file")
+    parser.add_argument("--export-latex-standalone", type=str,
+                       help="Path to export a complete, compilable LaTeX IP Card using the common template")
+    parser.add_argument("--export-pdf", type=str,
+                       help="Path to export a standardized PDF IP Card through the common LaTeX template")
+    parser.add_argument("--pdf-template", type=str,
+                       help="Optional path to the standalone LaTeX PDF template")
     parser.add_argument("--normalize-schema", type=str,
                        help="Write a copy of the schema with schema acronyms normalized to uppercase")
     
+    if len(sys.argv) == 1:
+        parser.print_help()
+        raise SystemExit(0)
+
     args = parser.parse_args()
     raise SystemExit(
         main(
@@ -692,5 +904,8 @@ if __name__ == "__main__":
             export_ods=args.export_ods,
             export_latex=args.export_latex,
             normalize_schema=args.normalize_schema,
+            export_latex_standalone=args.export_latex_standalone,
+            export_pdf=args.export_pdf,
+            pdf_template=args.pdf_template,
         )
     )
