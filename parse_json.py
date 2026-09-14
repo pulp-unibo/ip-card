@@ -362,7 +362,7 @@ def escape_latex(text: Any) -> str:
 
 def format_field_name(key: str) -> str:
     """Convert camelCase / PascalCase field names to human-readable labels,
-    preserving known acronyms (IP, ISA, SW, TRL, â€¦)."""
+    preserving known acronyms (IP, ISA, SW, TRL, ...)."""
     special_cases = {
         "ipXact": "IP-XACT",
         "targetFpgaOrAsic": "Target FPGA or ASIC",
@@ -376,7 +376,7 @@ def format_field_name(key: str) -> str:
 
     import re
 
-    # Split leading acronym from the rest: SWDependencies â†’ SW | Dependencies
+    # Split leading acronym from the rest: SWDependencies -> SW | Dependencies
     key = re.sub(r'^([A-Z]{2,})([A-Z][a-z])', r'\1 \2', key)
 
     parts = re.findall(r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z0-9]+|[A-Z]+', key)

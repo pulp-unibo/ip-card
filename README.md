@@ -84,6 +84,19 @@ Example:
 ```bash
 python parse_json.py --schema swipcard_schema.jsonschema --ip examples/FENTISS_xng.json --export-latex-standalone FENTISS_xng.tex --export-pdf FENTISS_xng.pdf
 
+```
+
+An alternative template can be selected with:
+
+```bash
+--pdf-template <template.tex>
+```
+
+PDF generation requires `latexmk` or `xelatex`.
+
+The existing `--export-latex` option remains unchanged.
+
+The provided template targets Software IP Cards. Hardware IP Card formatting can use a separate template.
 
 ## License
 
