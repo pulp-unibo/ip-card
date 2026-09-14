@@ -1,0 +1,41 @@
+\documentclass[9pt,a4paper]{article}
+\usepackage[landscape,margin=10mm,headsep=4mm,footskip=6mm]{geometry}
+\usepackage{fontspec}
+\setmainfont{DejaVu Sans}
+\setsansfont{DejaVu Sans}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage{ragged2e}
+\setlength{\parindent}{0pt}
+\setlength{\LTpre}{1mm}
+\setlength{\LTpost}{1mm}
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.14}
+\definecolor{ISOLDEBlue}{HTML}{1F5A8E}
+\definecolor{ISOLDELight}{HTML}{EEF4F9}
+\definecolor{ISOLDEBorder}{HTML}{B8C7D5}
+\pagestyle{fancy}
+\fancyhf{}
+\lfoot{\scriptsize @@FOOTER_LEFT@@}
+\rfoot{\scriptsize Page \thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\newcommand{\SectionRow}[1]{%
+  \rowcolor{ISOLDEBlue}\multicolumn{3}{@{}l@{}}{\color{white}\bfseries\large\strut #1}\\[-0.2mm]
+}
+\newcommand{\LabelCell}[1]{\textbf{#1}}
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\begin{document}
+\begin{center}
+{\LARGE\bfseries @@TITLE@@}\\[1.5mm]
+{\small @@SUBTITLE@@}
+\end{center}
+\vspace{1mm}
+@@BODY@@
+\end{document}
