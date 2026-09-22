@@ -8,6 +8,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "ipName": { "type": "string" },
         "licensing": { "type": "string" },
         "targetFpgaOrAsic": { "type": "string" },
         "designLanguage": { "type": "string" }

@@ -715,7 +715,8 @@ def render_standalone_latex(data: Dict[str, Any], template_path: Optional[str] =
     """Render a complete, compilable LaTeX IP Card using the common template."""
     template = _resolve_pdf_template(template_path).read_text(encoding="utf-8")
     basic = data.get("basicInfo", {}) if isinstance(data, dict) else {}
-    title = str(basic.get("ipName", "Software IP Card"))
+    is_sw = "schemaVersion" in data
+    title = str(basic.get("ipName") or ("Software IP Card" if is_sw else "Hardware IP Card"))
     provider = ""
     providers = basic.get("provider") or []
     if isinstance(providers, list) and providers and isinstance(providers[0], dict):
@@ -725,7 +726,10 @@ def render_standalone_latex(data: Dict[str, Any], template_path: Optional[str] =
     version = str(basic.get("version", ""))
     subtitle_parts = [x for x in [provider, project, work_item, f"Version {version}" if version else ""] if x]
     subtitle = " | ".join(subtitle_parts)
-    footer = f"SW IP Card schema v{data.get('schemaVersion', '')} | Generated from validated JSONC"
+    if is_sw:
+        footer = f"SW IP Card schema v{data.get('schemaVersion', '')} | Generated from validated JSONC"
+    else:
+        footer = "HW IP Card | Generated from validated JSONC"
     replacements = {
         "@@TITLE@@": escape_latex(title),
         "@@SUBTITLE@@": escape_latex(subtitle),
